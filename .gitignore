@@ -1,0 +1,20 @@
+# Build output
+target/
+
+# IDE
+.idea/
+*.iml
+.project
+.classpath
+.settings/
+
+# Compiled plugin classes (generated at runtime)
+plugins/*.class
+plugins/**/*.class
+
+# Keep plugins directory
+!plugins/.gitkeep
+
+# OS files
+.DS_Store
+Thumbs.db
