@@ -4,18 +4,7 @@ A lightweight Java library that reloads classes at runtime without restarting th
 
 ## Quick Start
 
-**1. Annotate your main class:**
-
-```java
-@EnableHotReload(sourcePaths = {"src/main/java"}, pollIntervalMs = 500)
-public class MyApp {
-    public static void main(String[] args) {
-        // your code — no special initialization needed
-    }
-}
-```
-
-**2. Mark reloadable classes:**
+**1. Mark reloadable classes:**
 
 ```java
 @HotReload
@@ -26,10 +15,34 @@ public class GreetingService {
 }
 ```
 
-**3. Run with the agent:**
+**2. Run with the agent (preferred):**
+
+Add `@EnableHotReload` to your main class if your source path differs from the default `src/main/java`:
+
+```java
+@EnableHotReload(sourcePaths = {"my-module/src/main/java"})
+public class MyApp {
+    public static void main(String[] args) {
+        // no special initialization needed — engine starts automatically
+    }
+}
+```
 
 ```
 java -javaagent:hot-reload-core-1.0-SNAPSHOT.jar -cp ... MyApp
+```
+
+If your sources are in the standard `src/main/java`, the annotation is optional — the agent will use default paths.
+
+**3. Or start manually (fallback, no agent):**
+
+```java
+public class MyApp {
+    public static void main(String[] args) {
+        new GreetingService(); // ensure @HotReload classes are loaded
+        HotReload.start("src/main/java"); // attaches dynamically via ByteBuddy
+    }
+}
 ```
 
 Now edit `GreetingService.greet()`, save — the running application picks up the change automatically.
@@ -57,10 +70,11 @@ HotReloadAgent.premain()
       for @EnableHotReload annotation descriptor
       │
       ▼
-      Found → schedules HotReloadEngine start
+      Found → reads sourcePaths from annotation (or uses default)
+              → schedules HotReloadEngine start
                │
                ▼
-         HotReloadEngine.buildSourceMap()
+         HotReloadEngine.startIfNotRunning()
           ├── Scans all loaded classes via Instrumentation.getAllLoadedClasses()
           ├── Filters by @HotReload annotation
           └── Maps each class to its .java source file using configured sourcePaths
@@ -83,7 +97,7 @@ HotReloadAgent.premain()
 |-------|------|
 | `HotReloadAgent` | Java agent entry point (`premain` / `agentmain`). Captures `Instrumentation` and registers the transformer. |
 | `HotReloadTransformer` | `ClassFileTransformer` that detects `@EnableHotReload` during class loading and auto-starts the engine. |
-| `HotReloadEngine` | Builds a source-to-class map from loaded `@HotReload` classes, then starts the file watcher. |
+| `HotReloadEngine` | Builds a source-to-class map from loaded `@HotReload` classes, then starts the file watcher. Protected from double-start via `startIfNotRunning()`. |
 | `HotClassFileWatcher` | NIO `WatchService` wrapper. Recursively monitors source directories for `.java` changes. |
 | `HotSourceCompiler` | Compiles changed `.java` files using `ToolProvider.getSystemJavaCompiler()`. |
 | `HotClassReloader` | Redefines classes in the running JVM via `Instrumentation.redefineClasses()`. |
@@ -92,30 +106,20 @@ HotReloadAgent.premain()
 
 | Annotation | Target | Purpose |
 |------------|--------|---------|
-| `@EnableHotReload` | Main class | Enables the engine. Options: `sourcePaths` (default `src/main/java`), `pollIntervalMs` (default `500`). |
+| `@EnableHotReload` | Main class | Configures source paths for the agent. Optional if using the default `src/main/java`. Attribute: `sourcePaths` (default `{"src/main/java"}`). |
 | `@HotReload` | Any class | Marks the class for hot-reloading. |
-
-### Fallback Mode (no agent)
-
-If you can't use `-javaagent`, call `HotReload.start()` explicitly:
-
-```java
-@EnableHotReload(sourcePaths = {"src/main/java"})
-public class MyApp {
-    public static void main(String[] args) {
-        HotReload.start(MyApp.class); // attaches dynamically via ByteBuddy
-    }
-}
-```
 
 ## Build
 
 Requires **JDK 17+** (not JRE — the library needs `javax.tools.JavaCompiler` at runtime).
 
 ```bash
-./mvnw clean install     # Unix
-mvnw.cmd clean install   # Windows
+./mvnw clean install   
 ```
+```bash
+java -javaagent:hot-reload-core/target/hot-reload-core-1.0-SNAPSHOT.jar -jar .\demo-app\target\demo-app-1.0-SNAPSHOT.jar
+```
+
 
 ## Limitations
 
@@ -123,6 +127,3 @@ mvnw.cmd clean install   # Windows
 - **Classes must be loaded first** — the engine scans `getAllLoadedClasses()`, so `@HotReload` classes must be loaded before the engine starts. With the agent this happens automatically; with `HotReload.start()`, instantiate your classes before calling `start()`.
 - **JDK required** — the runtime compiler (`javax.tools.JavaCompiler`) is only available in JDK distributions.
 
-## License
-
-MIT

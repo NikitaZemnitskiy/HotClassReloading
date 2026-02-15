@@ -9,5 +9,4 @@ import java.lang.annotation.Target;
 @Target(ElementType.TYPE)
 public @interface EnableHotReload {
     String[] sourcePaths() default {"src/main/java"};
-    long pollIntervalMs() default 500;
 }

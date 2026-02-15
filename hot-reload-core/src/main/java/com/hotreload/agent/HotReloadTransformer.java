@@ -27,7 +27,7 @@ public class HotReloadTransformer implements ClassFileTransformer {
     public byte[] transform(ClassLoader loader, String className, Class<?> classBeingRedefined,
                             ProtectionDomain protectionDomain, byte[] classfileBuffer) {
         if (started || classBeingRedefined != null || loader == null) {
-            return new byte[0];
+            return null;
         }
 
         if (containsAnnotation(classfileBuffer)) {
@@ -40,7 +40,7 @@ public class HotReloadTransformer implements ClassFileTransformer {
             starter.start();
         }
 
-        return new byte[0];
+        return null;
     }
 
     private static boolean containsAnnotation(byte[] bytecode) {
@@ -67,12 +67,10 @@ public class HotReloadTransformer implements ClassFileTransformer {
 
             Class<?> appClass = Class.forName(className, true, loader);
             EnableHotReload config = appClass.getAnnotation(EnableHotReload.class);
-            if (config == null) {
-                LOG.log(Level.WARNING, "[HotReload] @EnableHotReload not found on {0} at runtime", className);
-                return;
-            }
 
-            new HotReloadEngine(instrumentation, config).start();
+            String[] sourcePaths = (config != null) ? config.sourcePaths() : HotReloadEngine.DEFAULT_SOURCE_PATHS;
+
+            HotReloadEngine.startIfNotRunning(instrumentation, sourcePaths);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             LOG.warning("[HotReload] Engine start interrupted");
